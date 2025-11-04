@@ -3,153 +3,158 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>タイマー | Fixeve</title>
+<title>Fixeve Timer</title>
 <style>
-    body {
-        font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
-        text-align: center;
-        background-color: #ffffff;
-        color: #000;
-        margin: 0;
-        padding: 0;
-    }
-    h1 {
-        margin-top: 25px;
-        font-size: 26px;
-        color: #007BFF;
-    }
-    #timer {
-        font-size: 64px;
-        font-weight: bold;
-        margin: 40px 0;
-    }
-    .buttons {
-        margin: 20px;
-    }
-    button {
-        margin: 10px;
-        font-size: 18px;
-        padding: 10px 25px;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: 0.2s;
-    }
-    #startBtn { background-color: #007bff; color: white; }
-    #pauseBtn { background-color: #ffcc00; color: black; }
-    #stopBtn  { background-color: #ff4444; color: white; }
-    button:hover {
-        opacity: 0.8;
-        transform: scale(1.05);
-    }
-    #info {
-        margin-top: 30px;
-        font-size: 18px;
-        color: #333;
-    }
-    #todayTime {
-        font-weight: bold;
-        color: #007BFF;
-    }
+  body {
+    background-color: #eef6ff;
+    font-family: "Arial", sans-serif;
+    text-align: center;
+    padding: 30px;
+  }
+  h1 { margin-bottom: 10px; }
+  #timer {
+    font-size: 64px;
+    margin: 20px 0;
+  }
+  button {
+    font-size: 20px;
+    margin: 10px;
+    padding: 10px 30px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .start { background-color: #4caf50; color: white; }
+  .pause { background-color: #ff9800; color: white; }
+  .stop { background-color: #f44336; color: white; }
+  select {
+    padding: 8px;
+    font-size: 18px;
+  }
+  #home {
+    display: block;
+    margin-top: 30px;
+    color: #007bff;
+    text-decoration: none;
+  }
 </style>
 </head>
 <body>
-    <h1>ポモドーロタイマー</h1>
+  <h1>タイマー</h1>
 
-    <div id="timer">00:00:00</div>
+  <label for="mode">モード選択：</label>
+  <select id="mode">
+    <option value="up">カウントアップ</option>
+    <option value="pomodoro">25分勉強 / 5分休憩</option>
+    <option value="focus50">50分勉強 / 10分休憩</option>
+  </select>
 
-    <div class="buttons">
-        <button id="startBtn">開始</button>
-        <button id="pauseBtn">中断</button>
-        <button id="stopBtn" onclick="goHome()">終了</button>
-    </div>
+  <div id="timer">00:00</div>
+  <div id="status">停止中</div>
 
-    <div id="info">
-        今日の合計勉強時間：<span id="todayTime">00:00:00</span>
-    </div>
+  <button class="start" id="startBtn">開始</button>
+  <button class="pause" id="pauseBtn">中断</button>
+  <button class="stop" id="stopBtn">終了</button>
+
+  <a id="home" href="https://fixeve.github.io/fixeve-home/">ホームに戻る</a>
 
 <script>
-    let startTime = 0;
-    let elapsedTime = 0;
-    let timerInterval;
-    let isRunning = false;
+let timerDisplay = document.getElementById("timer");
+let statusDisplay = document.getElementById("status");
+let startBtn = document.getElementById("startBtn");
+let pauseBtn = document.getElementById("pauseBtn");
+let stopBtn = document.getElementById("stopBtn");
+let modeSelect = document.getElementById("mode");
 
-    const timerDisplay = document.getElementById("timer");
-    const todayTimeDisplay = document.getElementById("todayTime");
+let timer = null;
+let timeLeft = 0;
+let isRunning = false;
+let isStudy = true;
+let setCount = 1;
 
-    function getJSTDateKey() {
-        const now = new Date();
-        now.setHours(now.getHours() + 9);
-        return now.toISOString().split("T")[0];
-    }
+// 日付リセットチェック
+const todayKey = () => {
+  const now = new Date();
+  now.setHours(now.getHours() + 9); // 日本時間
+  return now.toISOString().split("T")[0];
+};
 
-    const todayKey = getJSTDateKey();
+function checkDailyReset() {
+  const savedDate = localStorage.getItem("fixeve_date");
+  const today = todayKey();
+  if (savedDate !== today) {
+    localStorage.setItem("fixeve_date", today);
+    localStorage.setItem("fixeve_studyTime", "0");
+  }
+}
+checkDailyReset();
 
-    function loadTodayStudyTime() {
-        const savedData = JSON.parse(localStorage.getItem("fixeve_study_log") || "{}");
-        const todaySeconds = savedData[todayKey] || 0;
-        todayTimeDisplay.textContent = formatTime(todaySeconds);
-        return todaySeconds;
-    }
+function updateDisplay() {
+  const minutes = String(Math.floor(timeLeft / 60)).padStart(2, "0");
+  const seconds = String(timeLeft % 60).padStart(2, "0");
+  timerDisplay.textContent = `${minutes}:${seconds}`;
+}
 
-    let totalToday = loadTodayStudyTime();
-
-    function formatTime(sec) {
-        const h = String(Math.floor(sec / 3600)).padStart(2, "0");
-        const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
-        const s = String(sec % 60).padStart(2, "0");
-        return `${h}:${m}:${s}`;
-    }
-
-    function updateTimer() {
-        const now = Date.now();
-        elapsedTime = Math.floor((now - startTime) / 1000);
-        timerDisplay.textContent = formatTime(elapsedTime);
-    }
-
-    document.getElementById("startBtn").onclick = () => {
-        if (!isRunning) {
-            startTime = Date.now();
-            timerInterval = setInterval(updateTimer, 1000);
-            isRunning = true;
+function startTimer() {
+  if (isRunning) return;
+  isRunning = true;
+  statusDisplay.textContent = isStudy ? "勉強中" : "休憩中";
+  timer = setInterval(() => {
+    if (modeSelect.value === "up") {
+      timeLeft++;
+    } else {
+      timeLeft--;
+      if (timeLeft < 0) {
+        clearInterval(timer);
+        isRunning = false;
+        if (isStudy) {
+          let sec = parseInt(localStorage.getItem("fixeve_studyTime") || "0");
+          localStorage.setItem("fixeve_studyTime", sec + (modeSelect.value === "pomodoro" ? 1500 : 3000));
         }
-    };
-
-    document.getElementById("pauseBtn").onclick = () => {
-        if (isRunning) {
-            clearInterval(timerInterval);
-            isRunning = false;
-            totalToday += elapsedTime;
-            saveTodayTime(totalToday);
-            elapsedTime = 0;
-            timerDisplay.textContent = "00:00:00";
-            todayTimeDisplay.textContent = formatTime(totalToday);
+        isStudy = !isStudy;
+        if (isStudy) {
+          setCount++;
+          let longBreak = (modeSelect.value === "pomodoro" ? 900 : 1800);
+          let shortBreak = (modeSelect.value === "pomodoro" ? 300 : 600);
+          timeLeft = (setCount % 5 === 0) ? longBreak : (modeSelect.value === "pomodoro" ? 1500 : 3000);
+        } else {
+          timeLeft = (modeSelect.value === "pomodoro" ? 300 : 600);
         }
-    };
-
-    function goHome() {
-        if (isRunning) {
-            clearInterval(timerInterval);
-            totalToday += elapsedTime;
-            saveTodayTime(totalToday);
-        }
-        window.location.href = "https://fixeve.github.io/fixeve-home/";
+        updateDisplay();
+        startTimer();
+      }
     }
+    updateDisplay();
+  }, 1000);
+}
 
-    function saveTodayTime(seconds) {
-        const savedData = JSON.parse(localStorage.getItem("fixeve_study_log") || "{}");
-        savedData[todayKey] = seconds;
-        localStorage.setItem("fixeve_study_log", JSON.stringify(savedData));
-    }
+function pauseTimer() {
+  if (!isRunning) return;
+  clearInterval(timer);
+  isRunning = false;
+  statusDisplay.textContent = "一時停止中";
+}
 
-    function watchMidnight() {
-        setInterval(() => {
-            const currentKey = getJSTDateKey();
-            if (currentKey !== todayKey) location.reload();
-        }, 60000);
-    }
+function stopTimer() {
+  clearInterval(timer);
+  isRunning = false;
+  isStudy = true;
+  timeLeft = 0;
+  setCount = 1;
+  updateDisplay();
+  statusDisplay.textContent = "停止中";
+}
 
-    watchMidnight();
+startBtn.onclick = () => {
+  if (modeSelect.value === "up" && timeLeft === 0) timeLeft = 0;
+  if (modeSelect.value === "pomodoro" && timeLeft === 0) timeLeft = 1500;
+  if (modeSelect.value === "focus50" && timeLeft === 0) timeLeft = 3000;
+  startTimer();
+};
+pauseBtn.onclick = pauseTimer;
+stopBtn.onclick = stopTimer;
+
+updateDisplay();
 </script>
 </body>
 </html>

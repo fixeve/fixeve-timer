@@ -79,7 +79,7 @@ let isRunning = false;
 let isStudy = true;
 let setCount = 1;
 let flashing = false;
-let elapsedUp = 0; // カウントアップ用経過秒数
+let elapsedUp = 0; // カウントアップ経過秒
 
 function todayKey() {
   const now = new Date();
@@ -123,19 +123,26 @@ function getInitialTime() {
   return 0;
 }
 
-// モード変更時に記録＆リセット
+// ✅ モード変更時（カウントアップの加算を正確に）
 modeSelect.addEventListener("change", () => {
   if (isRunning) pauseTimer();
-  if (modeSelect.value === "up" && elapsedUp > 0) {
+
+  const prevMode = modeSelect.dataset.prevMode || "up";
+
+  if (prevMode === "up") {
+    // カウントアップ中ならそのまま経過時間を加算
     recordStudy(elapsedUp);
-  } else if (isStudy && timeLeft > 0 && getInitialTime() > 0) {
+  } else if (isStudy && getInitialTime() > 0 && timeLeft > 0) {
+    // 他のモードの場合だけ差分を加算
     recordStudy(getInitialTime() - timeLeft);
   }
+
   stopTimer();
   elapsedUp = 0;
+  modeSelect.dataset.prevMode = modeSelect.value;
 });
 
-// --- 超チカチカ ---
+// --- 超チカチカ点滅 ---
 function startFlashing() {
   flashing = true;
   let colors = ["#9f00ff", "#000000", "#baff00", "#000000"];
@@ -215,7 +222,7 @@ pauseBtn.onclick = pauseTimer;
 stopBtn.onclick = () => {
   if (modeSelect.value === "up") {
     recordStudy(elapsedUp);
-  } else if (isStudy && timeLeft > 0 && getInitialTime() > 0) {
+  } else if (isStudy && getInitialTime() > 0 && timeLeft > 0) {
     recordStudy(getInitialTime() - timeLeft);
   }
   stopTimer();
@@ -224,6 +231,7 @@ stopBtn.onclick = () => {
 
 updateDisplay();
 updateTotalDisplay();
+modeSelect.dataset.prevMode = "up";
 </script>
 </body>
 </html>

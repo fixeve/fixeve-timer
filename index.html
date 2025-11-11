@@ -3,235 +3,143 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fixeve Timer</title>
+<title>Fixeve タイマー</title>
 <style>
   body {
+    font-family: "Hiragino Kaku Gothic ProN", sans-serif;
     background-color: #eef6ff;
-    font-family: "Arial", sans-serif;
     text-align: center;
+    margin: 0;
     padding: 30px;
-    transition: background-color 0.1s;
   }
-  h1 { margin-bottom: 10px; }
-  #timer {
-    font-size: 64px;
-    margin: 20px 0;
-  }
-  #status, #total {
-    font-size: 20px;
-    margin: 10px 0;
-  }
+  h1 { font-size: 26px; }
+  .time { font-size: 48px; margin: 20px 0; }
   button {
-    font-size: 20px;
-    margin: 10px;
-    padding: 10px 30px;
+    margin: 8px;
+    padding: 12px 25px;
+    font-size: 18px;
     border: none;
     border-radius: 8px;
-    cursor: pointer;
+    color: #fff;
   }
-  .start { background-color: #4caf50; color: white; }
-  .pause { background-color: #ff9800; color: white; }
-  .stop { background-color: #f44336; color: white; }
-  select {
-    padding: 8px;
-    font-size: 18px;
-  }
-  #home {
-    display: block;
-    margin-top: 30px;
-    color: #007bff;
-    text-decoration: none;
-  }
+  .start { background-color: #007bff; }
+  .pause { background-color: #888; }
+  .end { background-color: #d9534f; }
+  .select-btn { background-color: #28a745; }
+  #total { margin-top: 20px; font-size: 18px; }
+  a { display: block; margin-top: 25px; color: #007bff; font-weight: bold; text-decoration: none; }
 </style>
 </head>
 <body>
-  <h1>タイマー</h1>
+<h1>Fixeve タイマー</h1>
 
-  <label for="mode">モード選択：</label>
-  <select id="mode">
-    <option value="up">カウントアップ</option>
-    <option value="pomodoro">25分勉強 / 5分休憩</option>
-    <option value="focus50">50分勉強 / 10分休憩</option>
-  </select>
+<div>
+  <button class="select-btn" onclick="selectMode('countup')">カウントアップ</button>
+  <button class="select-btn" onclick="selectMode('pomodoro25')">25分/5分</button>
+  <button class="select-btn" onclick="selectMode('pomodoro50')">50分/10分</button>
+</div>
 
-  <div id="timer">00:00</div>
-  <div id="status">停止中</div>
-  <div id="total">今日の合計：0時間0分</div>
+<div class="time" id="display">00:00</div>
+<div id="statusText"></div>
 
-  <button class="start" id="startBtn">開始</button>
-  <button class="pause" id="pauseBtn">中断</button>
-  <button class="stop" id="stopBtn">終了</button>
+<div>
+  <button class="start" onclick="startTimer()">開始</button>
+  <button class="pause" onclick="pauseTimer()">中断</button>
+  <button class="end" onclick="endTimer()">終了</button>
+</div>
 
-  <a id="home" href="https://fixeve.github.io/fixeve-home/">ホームに戻る</a>
+<p id="total">今日の合計時間: 0時間0分</p>
+<a href="https://fixeve.github.io/fixeve-home/">ホームに戻る</a>
 
 <script>
-let timerDisplay = document.getElementById("timer");
-let statusDisplay = document.getElementById("status");
-let totalDisplay = document.getElementById("total");
-let startBtn = document.getElementById("startBtn");
-let pauseBtn = document.getElementById("pauseBtn");
-let stopBtn = document.getElementById("stopBtn");
-let modeSelect = document.getElementById("mode");
+let timer = null, elapsed = 0, isRunning = false, mode = "countup";
+let studyRecords = JSON.parse(localStorage.getItem("studyRecords") || "{}");
+let focusTime = 25*60, breakTime = 5*60, longBreak = 15*60;
+let setCount = 0, flashing = false;
 
-let timer = null;
-let timeLeft = 0;
-let isRunning = false;
-let isStudy = true;
-let setCount = 1;
-let flashing = false;
-let elapsedUp = 0; // カウントアップ経過秒
-
-function todayKey() {
-  const now = new Date();
-  now.setHours(now.getHours() + 9);
-  return now.toISOString().split("T")[0];
+function selectMode(m){
+  recordTime(); // ← 変更時に現在の時間を保存
+  mode = m; elapsed = 0; setCount = 0; updateDisplay();
+  document.body.style.backgroundColor = "#eef6ff";
 }
 
-function checkDailyReset() {
-  const savedDate = localStorage.getItem("fixeve_date");
-  const today = todayKey();
-  if (savedDate !== today) {
-    localStorage.setItem("fixeve_date", today);
-    localStorage.setItem("fixeve_studyTime", "0");
-  }
-}
-checkDailyReset();
-
-function updateTotalDisplay() {
-  const sec = parseInt(localStorage.getItem("fixeve_studyTime") || "0");
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  totalDisplay.textContent = `今日の合計：${h}時間${m}分`;
-}
-
-function recordStudy(seconds) {
-  if (seconds <= 0) return;
-  let sec = parseInt(localStorage.getItem("fixeve_studyTime") || "0");
-  localStorage.setItem("fixeve_studyTime", sec + seconds);
-  updateTotalDisplay();
-}
-
-function updateDisplay() {
-  const minutes = String(Math.floor(timeLeft / 60)).padStart(2, "0");
-  const seconds = String(timeLeft % 60).padStart(2, "0");
-  timerDisplay.textContent = `${minutes}:${seconds}`;
-}
-
-function getInitialTime() {
-  if (modeSelect.value === "pomodoro") return 1500;
-  if (modeSelect.value === "focus50") return 3000;
-  return 0;
-}
-
-// ✅ モード変更時（カウントアップの加算を正確に）
-modeSelect.addEventListener("change", () => {
-  if (isRunning) pauseTimer();
-
-  const prevMode = modeSelect.dataset.prevMode || "up";
-
-  if (prevMode === "up") {
-    // カウントアップ中ならそのまま経過時間を加算
-    recordStudy(elapsedUp);
-  } else if (isStudy && getInitialTime() > 0 && timeLeft > 0) {
-    // 他のモードの場合だけ差分を加算
-    recordStudy(getInitialTime() - timeLeft);
-  }
-
-  stopTimer();
-  elapsedUp = 0;
-  modeSelect.dataset.prevMode = modeSelect.value;
-});
-
-// --- 超チカチカ点滅 ---
-function startFlashing() {
-  flashing = true;
-  let colors = ["#9f00ff", "#000000", "#baff00", "#000000"];
-  let i = 0;
-  let flashInterval = setInterval(() => {
-    if (!flashing) {
-      clearInterval(flashInterval);
-      document.body.style.backgroundColor = "#eef6ff";
-      return;
-    }
-    document.body.style.backgroundColor = colors[i % colors.length];
-    i++;
-  }, 150);
-  document.body.addEventListener("click", nextAfterFlash, { once: true });
-}
-
-function nextAfterFlash() {
-  flashing = false;
-  isStudy = !isStudy;
-  if (isStudy) {
-    setCount++;
-    const longBreak = (modeSelect.value === "pomodoro" ? 900 : 1800);
-    const studyTime = (modeSelect.value === "pomodoro" ? 1500 : 3000);
-    timeLeft = (setCount % 5 === 0) ? longBreak : studyTime;
-  } else {
-    timeLeft = (modeSelect.value === "pomodoro" ? 300 : 600);
-  }
-  updateDisplay();
-  startTimer();
-}
-
-function startTimer() {
+function startTimer(){
   if (isRunning) return;
   isRunning = true;
-  statusDisplay.textContent = isStudy ? "勉強中" : "休憩中";
-
-  timer = setInterval(() => {
-    if (modeSelect.value === "up") {
-      elapsedUp++;
-      timeLeft = elapsedUp;
-    } else {
-      timeLeft--;
-      if (timeLeft < 0) {
-        clearInterval(timer);
-        isRunning = false;
-        if (isStudy) recordStudy(modeSelect.value === "pomodoro" ? 1500 : 3000);
-        startFlashing();
-        return;
-      }
-    }
+  const start = Date.now() - elapsed*1000;
+  timer = setInterval(()=>{
+    elapsed = Math.floor((Date.now() - start)/1000);
     updateDisplay();
+    if (mode !== "countup") checkPomodoro();
   }, 1000);
 }
 
-function pauseTimer() {
+function pauseTimer(){
   if (!isRunning) return;
   clearInterval(timer);
   isRunning = false;
-  statusDisplay.textContent = "一時停止中";
+  recordTime();
+  updateTotal();
 }
 
-function stopTimer() {
-  clearInterval(timer);
-  isRunning = false;
-  isStudy = true;
-  setCount = 1;
-  timeLeft = 0;
+function endTimer(){
+  if (isRunning) pauseTimer();
+  recordTime();
+  elapsed = 0;
   updateDisplay();
-  statusDisplay.textContent = "停止中";
+  updateTotal();
+  location.href = "https://fixeve.github.io/fixeve-home/";
 }
 
-startBtn.onclick = () => {
-  if (modeSelect.value !== "up" && timeLeft === 0) timeLeft = getInitialTime();
-  startTimer();
-};
-pauseBtn.onclick = pauseTimer;
-stopBtn.onclick = () => {
-  if (modeSelect.value === "up") {
-    recordStudy(elapsedUp);
-  } else if (isStudy && getInitialTime() > 0 && timeLeft > 0) {
-    recordStudy(getInitialTime() - timeLeft);
-  }
-  stopTimer();
-  elapsedUp = 0;
-};
+function updateDisplay(){
+  const m = String(Math.floor(elapsed/60)).padStart(2,"0");
+  const s = String(elapsed%60).padStart(2,"0");
+  document.getElementById("display").textContent = `${m}:${s}`;
+}
 
-updateDisplay();
-updateTotalDisplay();
-modeSelect.dataset.prevMode = "up";
+function recordTime(){
+  if (elapsed === 0) return;
+  const dateKey = new Date().toLocaleDateString('sv-SE');
+  studyRecords[dateKey] = (studyRecords[dateKey] || 0) + elapsed;
+  localStorage.setItem("studyRecords", JSON.stringify(studyRecords));
+  elapsed = 0;
+}
+
+function updateTotal(){
+  const dateKey = new Date().toLocaleDateString('sv-SE');
+  const total = studyRecords[dateKey] || 0;
+  const h = Math.floor(total/3600);
+  const m = Math.floor((total%3600)/60);
+  document.getElementById("total").textContent = `今日の合計時間: ${h}時間${m}分`;
+}
+
+function checkPomodoro(){
+  let cycle = mode==="pomodoro25" ? {focus:25*60, short:5*60, long:15*60}
+             : {focus:50*60, short:10*60, long:30*60};
+  const total = cycle.focus + cycle.short;
+  if (elapsed >= cycle.focus) startFlashing();
+}
+
+function startFlashing(){
+  flashing = true;
+  clearInterval(timer); isRunning = false;
+  let colors = ["#9f00ff","#000000","#baff00","#000000"];
+  let i = 0;
+  let flashInterval = setInterval(()=>{
+    if(!flashing){
+      clearInterval(flashInterval);
+      document.body.style.backgroundColor="#eef6ff";
+      return;
+    }
+    document.body.style.backgroundColor = colors[i%colors.length];
+    i++;
+  },150);
+  document.body.addEventListener("click", ()=>{
+    flashing=false; elapsed=0; setCount++; startTimer();
+  },{once:true});
+}
+
+updateTotal();
 </script>
 </body>
 </html>

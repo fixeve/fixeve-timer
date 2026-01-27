@@ -125,8 +125,13 @@ function pause(){
 /* ===== 終了 ===== */
 function stopTimer(){
   clearInterval(timer);
-  isRunning=false;
+  isRunning = false;
+
+  // 勉強時間を確定して保存
   addStudyTime();
+
+  // ホームへ移動
+  window.location.href = "https://fixeve.github.io/fixeve-home/";
 }
 
 /* ===== 毎秒 ===== */

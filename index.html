@@ -16,7 +16,7 @@ h1{margin-top:28px;font-size:30px;}
 #time-display{font-size:70px;margin:30px 0;}
 .button-container{display:flex;justify-content:center;gap:14px;}
 button{
-  font-size:20px;padding:10px 26px;border:none;border-radius:10px;
+  font-size:20px;padding:10px 26px;border:none;border-radius:12px;
   cursor:pointer;color:white;
 }
 #start-btn{background:#28a745;}
@@ -58,16 +58,25 @@ a{display:block;margin:30px 0;font-size:18px;text-decoration:none;color:#007aff;
 <a href="https://fixeve.github.io/fixeve-home/">ホームへ戻る</a>
 
 <script>
-/* ===== 基本 ===== */
+/* ===== DOM取得（← これが抜けてた） ===== */
+const startBtn = document.getElementById("start-btn");
+const pauseBtn = document.getElementById("pause-btn");
+const stopBtn  = document.getElementById("stop-btn");
+const lockBtn  = document.getElementById("lock-btn");
+const modeSel  = document.getElementById("mode");
+const display  = document.getElementById("time-display");
+const totalDisplay = document.getElementById("total-time");
+
+/* ===== 状態 ===== */
 let timer=null;
 let mode="countup";
-let phase="study"; // study / break
+let phase="study";
 let remaining=0;
 let isRunning=false;
 let phaseStartTime=null;
 let flashing=false;
 
-/* ===== 日本時間キー ===== */
+/* ===== 日本時間 ===== */
 function getTodayKey(){
   const n=new Date();
   const j=new Date(n.getTime()+9*3600000);
@@ -76,8 +85,6 @@ function getTodayKey(){
 let totalTime=parseInt(localStorage.getItem("study_"+getTodayKey()))||0;
 
 /* ===== 表示 ===== */
-const display=document.getElementById("time-display");
-const totalDisplay=document.getElementById("total-time");
 function fmt(sec){
   const h=Math.floor(sec/3600);
   const m=Math.floor(sec%3600/60);
@@ -91,16 +98,16 @@ function updateTotal(){
 }
 updateTotal();
 
-/* ===== ボタン ===== */
+/* ===== イベント ===== */
 startBtn.onclick=start;
 pauseBtn.onclick=pause;
 stopBtn.onclick=stopTimer;
-lockBtn.onclick=()=>location.href="concentration://open";
-mode.onchange=changeMode;
+lockBtn.onclick=()=>{ location.href="concentration://open"; };
+modeSel.onchange=changeMode;
 
 /* ===== 開始 ===== */
 function start(){
-  if(flashing){stopFlash(); nextPhase(); return;}
+  if(flashing){ stopFlash(); nextPhase(); return; }
   if(isRunning) return;
   isRunning=true;
   phaseStartTime=Date.now();
@@ -117,11 +124,9 @@ function pause(){
 
 /* ===== 終了 ===== */
 function stopTimer(){
-  if(!confirm("ホームに戻りますか？")) return;
   clearInterval(timer);
   isRunning=false;
   addStudyTime();
-  location.href="https://fixeve.github.io/fixeve-home/";
 }
 
 /* ===== 毎秒 ===== */
@@ -140,22 +145,21 @@ function tick(){
   }
 }
 
-/* ===== 勉強時間加算（ポモドーロ修正点） ===== */
+/* ===== 勉強時間加算 ===== */
 function addStudyTime(){
   if(mode!=="countup" && phase!=="study") return;
   if(!phaseStartTime) return;
-  const diff=Math.floor((Date.now()-phaseStartTime)/1000);
-  totalTime+=diff;
+  totalTime+=Math.floor((Date.now()-phaseStartTime)/1000);
   localStorage.setItem("study_"+getTodayKey(),totalTime);
   updateTotal();
   phaseStartTime=null;
 }
 
-/* ===== フェーズ制御 ===== */
+/* ===== フェーズ ===== */
 function nextPhase(){
   if(mode==="countup") return;
   phase=(phase==="study")?"break":"study";
-  remaining =
+  remaining=
     mode==="pomodoro25"
       ? (phase==="study"?1500:300)
       : (phase==="study"?3000:600);
@@ -179,7 +183,7 @@ function startFlash(){
   let i=0;
   timer=setInterval(()=>{
     document.body.style.background=(i++%2)?"#d8b3ff":"#aaffaa";
-  },180);
+  },160);
 }
 function stopFlash(){
   clearInterval(timer);
